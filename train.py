@@ -13,6 +13,7 @@ from pathlib import Path
 
 #metrics
 import torchmetrics
+import nltk
 from nltk.translate import meteor_score
 
 from torch.utils.tensorboard import SummaryWriter
@@ -93,7 +94,7 @@ def run_validation(model, validation_ds, tokenizer_src, tokenizer_tgt, max_len, 
                 break
     
     if writer:
-        cer,wer,bleu,avg_meteor=compute_metrics(writer, tokenizer_tgt, predicted, expected, global_step)
+        cer,wer,bleu,avg_meteor=compute_metrics(writer, predicted, expected, global_step)
         print_msg('-'*console_width)
         print_msg(f"{f'Char Error Rate: ':>12}{cer}")
         print_msg(f"{f'Word Error Rate: ':>12}{wer}")
@@ -151,7 +152,7 @@ def run_test(model, test_ds, tokenizer_src, tokenizer_tgt, max_len, device, prin
             i+=1
     
     if writer:
-        cer,wer,bleu,avg_meteor=compute_metrics(writer, tokenizer_tgt, predicted, expected, test=True)
+        cer,wer,bleu,avg_meteor=compute_metrics(writer, predicted, expected, test=True)
         str_1=' Test evaluation metrics '
         new_console_width=int((console_width-len(str_1))/2)
         str_2='-'*new_console_width
@@ -163,7 +164,7 @@ def run_test(model, test_ds, tokenizer_src, tokenizer_tgt, max_len, device, prin
         print_msg('-'*console_width)
 
 
-def compute_metrics(writer, tokenizer_tgt, predicted, expected, global_step, test:bool=False):
+def compute_metrics(writer, predicted, expected, global_step, test:bool=False):
     # Evaluate the character error rate
     # Compute the char error rate 
     metric = torchmetrics.CharErrorRate()
@@ -195,9 +196,9 @@ def compute_metrics(writer, tokenizer_tgt, predicted, expected, global_step, tes
     # Compute the METEOR metric
     meteor_scores=list()
     for exepectation, prediction in zip(expected, predicted):
-        expected_tokens = tokenizer_tgt.encode(exepectation).ids
-        predicted_tokens = tokenizer_tgt.encode(prediction).ids 
-        score = meteor_score.single_meteor_score(expected_tokens, predicted_tokens)
+        exepectation= nltk.word_tokenize(exepectation)
+        prediction= nltk.word_tokenize(prediction)
+        score = meteor_score.single_meteor_score(exepectation, prediction)
         meteor_scores.append(score)
     average_meteor_score= sum(meteor_scores) / len(meteor_scores)
 
