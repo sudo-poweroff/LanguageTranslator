@@ -126,3 +126,60 @@ def get_or_build_tokenizer(config, ds, lang):
     else:
         tokenizer = Tokenizer.from_file(str(tokenizer_path))
     return tokenizer
+
+def get_ds(config):
+    # It only has the train split, so we divide it overselves
+    corpora=None
+    print("Loading corpora from Hugging face ({} - {})...".format(config['lang_src'], config['lang_tgt']))
+    if config['lang_src'] == 'de':
+        corpora = load_dataset(f"{config['datasource']}", f"{config['lang_src']}-{config['lang_tgt']}", split='train')
+    else:
+        print(f"{config['lang_tgt']}-{config['lang_src']}")
+        corpora = load_dataset(f"{config['datasource']}", f"{config['lang_tgt']}-{config['lang_src']}", split='train')
+
+    # Build tokenizers
+    tokenizer_src = get_or_build_tokenizer(config, corpora, config['lang_src'])
+    tokenizer_tgt = get_or_build_tokenizer(config, corpora, config['lang_tgt'])
+
+    # Split the corpora in train, test and valid
+    print("Corpora lenght: ",len(corpora))
+    train_ds_size = int(0.7 * len(corpora))
+    test_ds_size = int(0.2 * len(corpora))
+    val_ds_size = len(corpora) - train_ds_size - test_ds_size
+    print('Train size: {}, Validation size {}, Test size: {}'.format(train_ds_size, val_ds_size, test_ds_size))
+    train_ds_raw, test_ds_raw, val_ds_raw = random_split(corpora, [train_ds_size, test_ds_size, val_ds_size])
+
+    train_ds = BilingualDataset(train_ds_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])
+    test_ds = BilingualDataset(test_ds_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])
+    val_ds = BilingualDataset(val_ds_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])
+    # Find the maximum length of each sentence in the source and target sentence
+    max_len_src = 0
+    max_len_tgt = 0
+
+    for item in corpora:
+        src_ids = tokenizer_src.encode(item['translation'][config['lang_src']]).ids
+        tgt_ids = tokenizer_tgt.encode(item['translation'][config['lang_tgt']]).ids
+        max_len_src = max(max_len_src, len(src_ids))
+        max_len_tgt = max(max_len_tgt, len(tgt_ids))
+
+    print(f'Max length of source sentence: {max_len_src}')
+    print(f'Max length of target sentence: {max_len_tgt}')
+    
+
+    train_dataloader = DataLoader(train_ds, batch_size=config['batch_size'], shuffle=True)
+    test_dataloader = DataLoader(test_ds, batch_size=1, shuffle=False)
+    val_dataloader = DataLoader(val_ds, batch_size=1, shuffle=True)
+
+    return train_dataloader, test_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
+
+def save_test_data(test_ds, config):
+    print("Saving test data for translation {} - {}...".format(config['lang_src'], config['lang_tgt']))
+    Path("test_data").mkdir(parents=True, exist_ok=True)
+    file_path="test_data/test_"+config['lang_src']+"_"+config['lang_tgt']+".csv"
+    with open(file_path, "w", encoding="utf-8", newline="") as csv_file:
+        fieldnames = [config['lang_src'], config['lang_tgt']]
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for batch in test_ds:
+            writer.writerow({config['lang_src']: batch['src_text'][0], config['lang_tgt']: batch['tgt_text'][0]})
