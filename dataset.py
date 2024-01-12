@@ -1,5 +1,5 @@
 import torch
-import csv
+import json
 from torch.utils.data import  Dataset, DataLoader, random_split
 from pathlib import Path
 
@@ -127,27 +127,44 @@ def get_or_build_tokenizer(config, ds, lang):
         tokenizer = Tokenizer.from_file(str(tokenizer_path))
     return tokenizer
 
-def get_ds(config):
+def get_ds(config, download_data:bool=True):
     # It only has the train split, so we divide it overselves
     corpora=None
+    train_ds_raw =None
+    test_ds_raw = None
+    val_ds_raw = None
+
     print("Loading corpora from Hugging face ({} - {})...".format(config['lang_src'], config['lang_tgt']))
     if config['lang_src'] == 'de':
         corpora = load_dataset(f"{config['datasource']}", f"{config['lang_src']}-{config['lang_tgt']}", split='train')
     else:
         print(f"{config['lang_tgt']}-{config['lang_src']}")
         corpora = load_dataset(f"{config['datasource']}", f"{config['lang_tgt']}-{config['lang_src']}", split='train')
+        
+    if download_data:
+        # Split the corpora in train, test and valid
+        print("Corpora lenght: ",len(corpora))
+        train_ds_size = int(0.7 * len(corpora))
+        test_ds_size = int(0.2 * len(corpora))
+        val_ds_size = len(corpora) - train_ds_size - test_ds_size
+        print('Train size: {}, Validation size {}, Test size: {}'.format(train_ds_size, val_ds_size, test_ds_size))
+        train_ds_raw, test_ds_raw, val_ds_raw = random_split(corpora, [train_ds_size, test_ds_size, val_ds_size])
+    else:
+        print("Loading pre-saved data...")
+        with open("train_data/train_"+config['lang_src']+"_"+config['lang_tgt']+".json", "r", encoding='utf-8') as json_file:
+            train_ds_raw = json.load(json_file)
+        
+        with open("valid_data/valid_"+config['lang_src']+"_"+config['lang_tgt']+".json", "r", encoding='utf-8') as json_file:
+            val_ds_raw = json.load(json_file)
+
+        with open("test_data/test_"+config['lang_src']+"_"+config['lang_tgt']+".json", "r", encoding='utf-8') as json_file:
+            test_ds_raw = json.load(json_file)
 
     # Build tokenizers
     tokenizer_src = get_or_build_tokenizer(config, corpora, config['lang_src'])
     tokenizer_tgt = get_or_build_tokenizer(config, corpora, config['lang_tgt'])
 
-    # Split the corpora in train, test and valid
-    print("Corpora lenght: ",len(corpora))
-    train_ds_size = int(0.7 * len(corpora))
-    test_ds_size = int(0.2 * len(corpora))
-    val_ds_size = len(corpora) - train_ds_size - test_ds_size
-    print('Train size: {}, Validation size {}, Test size: {}'.format(train_ds_size, val_ds_size, test_ds_size))
-    train_ds_raw, test_ds_raw, val_ds_raw = random_split(corpora, [train_ds_size, test_ds_size, val_ds_size])
+    
 
     train_ds = BilingualDataset(train_ds_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])
     test_ds = BilingualDataset(test_ds_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])
@@ -175,11 +192,34 @@ def get_ds(config):
 def save_test_data(test_ds, config):
     print("Saving test data for translation {} - {}...".format(config['lang_src'], config['lang_tgt']))
     Path("test_data").mkdir(parents=True, exist_ok=True)
-    file_path="test_data/test_"+config['lang_src']+"_"+config['lang_tgt']+".csv"
-    with open(file_path, "w", encoding="utf-8", newline="") as csv_file:
-        fieldnames = [config['lang_src'], config['lang_tgt']]
-        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-        writer.writeheader()
+    file_path="test_data/test_"+config['lang_src']+"_"+config['lang_tgt']+".json"
+    test_data=list()
+    for batch in test_ds:
+        x={"translation": {config['lang_src'] : batch['src_text'][0], config['lang_tgt'] : batch['tgt_text'][0]}}
+        test_data.append(x)
+    with open(file_path, "w", encoding='utf-8') as json_file:
+        json.dump(test_data, json_file, ensure_ascii=False, indent=None)
 
-        for batch in test_ds:
-            writer.writerow({config['lang_src']: batch['src_text'][0], config['lang_tgt']: batch['tgt_text'][0]})
+def save_train_data(train_ds, config):
+    print("Saving train data for translation {} - {}...".format(config['lang_src'], config['lang_tgt']))
+    Path("train_data").mkdir(parents=True, exist_ok=True)
+    file_path="train_data/train_"+config['lang_src']+"_"+config['lang_tgt']+".json"
+    train_data=list()
+    for batch in train_ds:
+        for src_corpus,tgt_corpus in zip(batch['src_text'],batch['tgt_text']):
+            x={"translation": {config['lang_src'] : src_corpus, config['lang_tgt'] : tgt_corpus}}
+            train_data.append(x)
+    with open(file_path, "w", encoding='utf-8') as json_file:
+        json.dump(train_data, json_file, ensure_ascii=False, indent=None)
+
+
+def save_valid_data(valid_ds, config):
+    print("Saving validation data for translation {} - {}...".format(config['lang_src'], config['lang_tgt']))
+    Path("valid_data").mkdir(parents=True, exist_ok=True)
+    file_path="valid_data/valid_"+config['lang_src']+"_"+config['lang_tgt']+".json"
+    valid_data=list()
+    for batch in valid_ds:
+        x={"translation": {config['lang_src'] : batch['src_text'][0], config['lang_tgt'] : batch['tgt_text'][0]}}
+        valid_data.append(x)
+    with open(file_path, "w", encoding='utf-8') as json_file:
+        json.dump(valid_data, json_file, ensure_ascii=False, indent=None)

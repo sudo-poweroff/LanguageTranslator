@@ -1,5 +1,5 @@
 from model import build_transformer
-from dataset import causal_mask, get_ds, save_test_data
+from dataset import causal_mask, get_ds, save_test_data, save_train_data, save_valid_data
 from config import get_config, get_weights_file_path, latest_weights_file_path
 
 import torch
@@ -233,11 +233,25 @@ def train_and_test_model(config):
     Path(f"{config['datasource']}_weights").mkdir(parents=True, exist_ok=True)
     Path(f"{config['datasource']}_weights/{config['model_folder']}").mkdir(parents=True, exist_ok=True)
 
-    # Obtain datasets
-    train_dataloader, test_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds(config)
+    train_data_path = Path(f"train_data/train_{config['lang_src']}_{config['lang_tgt']}.json").exists()
+    valid_data_path = Path(f"valid_data/valid_{config['lang_src']}_{config['lang_tgt']}.json").exists()
+    test_data_path = Path(f"test_data/test_{config['lang_src']}_{config['lang_tgt']}.json").exists()
 
-    #Save test data
-    save_test_data(test_dataloader,config)
+    train_dataloader = None
+    test_dataloader = None
+    val_dataloader = None
+    tokenizer_src = None
+    tokenizer_tgt = None
+
+    if not(train_data_path and valid_data_path and test_data_path):
+        train_dataloader, test_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds(config)
+        #Save data
+        save_train_data(train_dataloader, config)
+        save_valid_data(val_dataloader,config)
+        save_test_data(test_dataloader, config)
+    else:
+        #Load the saved data
+        train_dataloader, test_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds(config, download_data=False)
 
     # Obtain transformer
     print("Building transformer...")
