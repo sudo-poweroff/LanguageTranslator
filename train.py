@@ -141,7 +141,7 @@ def run_test(model, test_ds, tokenizer_src, tokenizer_tgt, max_len, device, prin
             expected.append(target_text)
             predicted.append(model_out_text)
             if i % 20==0:
-                str_1=' Prediction '+i+' '
+                str_1=' Prediction '+str(i)+' '
                 new_console_width=int((console_width-len(str_1))/2)
                 str_2='-'*new_console_width
                 print_msg(str_2+str_1+str_2)
