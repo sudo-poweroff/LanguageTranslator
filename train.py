@@ -103,7 +103,7 @@ def run_validation(model, validation_ds, tokenizer_src, tokenizer_tgt, max_len, 
         print_msg('-'*console_width)
 
 
-def run_test(model, test_ds, tokenizer_src, tokenizer_tgt, max_len, device, print_msg, writer):
+def run_test(model, test_ds, tokenizer_src, tokenizer_tgt, max_len, device, writer):
     model.eval()
     count = 0
 
@@ -122,7 +122,7 @@ def run_test(model, test_ds, tokenizer_src, tokenizer_tgt, max_len, device, prin
 
     with torch.no_grad():
         i=1
-        batch_iterator = tqdm(test_ds, desc=f"Processing Sentence {i:02d}")
+        batch_iterator = tqdm(test_ds, desc=f"Processing test")
         for batch in batch_iterator:
             count += 1
             encoder_input = batch["encoder_input"].to(device) # (b, seq_len)
@@ -144,11 +144,11 @@ def run_test(model, test_ds, tokenizer_src, tokenizer_tgt, max_len, device, prin
                 str_1=' Prediction '+str(i)+' '
                 new_console_width=int((console_width-len(str_1))/2)
                 str_2='-'*new_console_width
-                print_msg(str_2+str_1+str_2)
-                print_msg(f"{f'SOURCE: ':>12}{source_text}")
-                print_msg(f"{f'TARGET: ':>12}{target_text}")
-                print_msg(f"{f'PREDICTED: ':>12}{model_out_text}")
-                print_msg('-'*console_width)
+                batch_iterator.write(str_2+str_1+str_2)
+                batch_iterator.write(f"{f'SOURCE: ':>12}{source_text}")
+                batch_iterator.write(f"{f'TARGET: ':>12}{target_text}")
+                batch_iterator.write(f"{f'PREDICTED: ':>12}{model_out_text}")
+                batch_iterator.write('-'*console_width)
             i+=1
     
     if writer:
@@ -156,15 +156,15 @@ def run_test(model, test_ds, tokenizer_src, tokenizer_tgt, max_len, device, prin
         str_1=' Test evaluation metrics '
         new_console_width=int((console_width-len(str_1))/2)
         str_2='-'*new_console_width
-        print_msg(str_2+str_1+str_2)
-        print_msg(f"{f'Char Error Rate: ':>12}{cer}")
-        print_msg(f"{f'Word Error Rate: ':>12}{wer}")
-        print_msg(f"{f'BLEU: ':>12}{bleu}")
-        print_msg(f"{f'METEOR: ':>12}{avg_meteor}")
-        print_msg('-'*console_width)
+        batch_iterator.write(str_2+str_1+str_2)
+        batch_iterator.write(f"{f'Char Error Rate: ':>12}{cer}")
+        batch_iterator.write(f"{f'Word Error Rate: ':>12}{wer}")
+        batch_iterator.write(f"{f'BLEU: ':>12}{bleu}")
+        batch_iterator.write(f"{f'METEOR: ':>12}{avg_meteor}")
+        batch_iterator.write('-'*console_width)
 
 
-def compute_metrics(writer, predicted, expected, global_step, test:bool=False):
+def compute_metrics(writer, predicted, expected, global_step:int=0, test:bool=False):
     # Evaluate the character error rate
     # Compute the char error rate 
     metric = torchmetrics.CharErrorRate()
@@ -188,7 +188,7 @@ def compute_metrics(writer, predicted, expected, global_step, test:bool=False):
     metric = torchmetrics.BLEUScore()
     bleu = metric(predicted, expected)
     if test:
-        writer.add_scalar('test ', bleu)
+        writer.add_scalar('test BLEU', bleu)
     else:
         writer.add_scalar('validation BLEU', bleu, global_step)
     writer.flush()
@@ -329,7 +329,7 @@ def train_and_test_model(config):
         }, model_filename)
 
     print("------------------------------------------------ START TEST ------------------------------------------------")
-    run_test(model, test_dataloader, tokenizer_src, tokenizer_tgt, config['seq_len'], device, lambda msg: batch_iterator.write(msg), writer)
+    run_test(model, test_dataloader, tokenizer_src, tokenizer_tgt, config['seq_len'], device, writer)
     
 
 
