@@ -13,6 +13,7 @@ from pathlib import Path
 
 #metrics
 import torchmetrics
+from torchmetrics.text import BLEUScore
 import nltk
 from nltk.translate import meteor_score
 
@@ -185,12 +186,17 @@ def compute_metrics(writer, predicted, expected, global_step:int=0, test:bool=Fa
     writer.flush()
 
     # Compute the BLEU metric
-    metric = torchmetrics.BLEUScore()
-    bleu = metric(predicted, expected)
+    metric = BLEUScore()
+    # Create a list of list to compute BLEU (only for the expected sentences)
+    expected_bleu = list()
+    for sentece in expected:
+        expected_bleu.append([sentece])
+    
+    bleu_value = metric(predicted, expected_bleu)
     if test:
-        writer.add_scalar('test BLEU', bleu)
+        writer.add_scalar('test BLEU', bleu_value)
     else:
-        writer.add_scalar('validation BLEU', bleu, global_step)
+        writer.add_scalar('validation BLEU', bleu_value, global_step)
     writer.flush()
 
     # Compute the METEOR metric
@@ -208,7 +214,7 @@ def compute_metrics(writer, predicted, expected, global_step:int=0, test:bool=Fa
         writer.add_scalar('average validation METEOR', average_meteor_score, global_step)
     writer.flush()
 
-    return cer, wer, bleu, average_meteor_score
+    return cer, wer, bleu_value, average_meteor_score
 
 def get_model(config, vocab_src_len, vocab_tgt_len):
     model = build_transformer(vocab_src_len, vocab_tgt_len, config["seq_len"], config['seq_len'], d_h=config['d_h'])
