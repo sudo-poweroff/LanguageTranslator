@@ -341,7 +341,7 @@ def train_and_test_model(config):
 
 if __name__ == '__main__':
     warnings.filterwarnings("ignore")
-    source_lang=str(input("Insert the source language (de, es, fr, it, nl, pl, pt, ru):\n"))
+    source_lang=str(input("Insert the source language (de, fr, it, nl, pl, pt, ru, fi):\n"))
     model_folder=str(input("Insert model folder name (model_srclang_tgtlang):\n"))
     experiment_name=str(input("Insert the experiment name:\n"))
     source_lang=source_lang.strip()
